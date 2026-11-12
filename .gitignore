@@ -1,0 +1,16 @@
+
+/data/
+__pycache__/
+*.pyc
+
+.tools/
+
+/dist/
+/build/
+*.egg-info/
+.venv/
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example

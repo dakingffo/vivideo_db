@@ -1,0 +1,12 @@
+# Run from the project root: conda env create -f environment.yml
+name: vivideo
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - pip
+  - ffmpeg  # Includes ffprobe.
+  - nodejs>=22
+  - pip:
+      - .

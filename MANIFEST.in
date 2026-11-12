@@ -1,0 +1,8 @@
+include README.md requirements.txt environment.yml docs/deployment.md docs/dev.md
+recursive-include python/vivideo/static *.html *.css *.js
+recursive-include docs/desgin *.md
+prune data
+prune .tools
+prune dist
+prune build
+global-exclude __pycache__ *.py[cod]
