@@ -1,5 +1,16 @@
 
-/data/
+# Track only the empty runtime directory skeleton.
+/data/**
+!/data/spaces/
+!/data/spaces/learning/
+!/data/spaces/roaming/
+!/data/spaces/*/sessions/
+!/data/spaces/*/media/
+!/data/spaces/*/media/assets/
+!/data/spaces/*/media/staging/
+!/data/spaces/*/sessions/.gitkeep
+!/data/spaces/*/media/assets/.gitkeep
+!/data/spaces/*/media/staging/.gitkeep
 __pycache__/
 *.pyc
 

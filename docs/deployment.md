@@ -148,6 +148,8 @@ data/
     └── roaming/                 # 独立数据库、媒体和配额
 ```
 
+Git 仅跟踪 `data/spaces/learning/` 和 `data/spaces/roaming/` 下 `sessions/`、`media/assets/`、`media/staging/` 的空目录占位文件。数据库、模型 API 配置、空间和会话记忆、视频及下载临时文件均不纳入版本管理，运行时按需创建。
+
 迁移前停止旧服务，将整个 `data/` 复制到目标目录，再用 `--data-dir` 指向它。备份包含明文存储的模型 API 密钥；文件权限为 0600。浏览器 LocalStorage 中的收藏、笔记、反馈和草稿不会随服务端数据自动迁移，本地视频保留状态保存在服务端。
 
 三个服务需要共用同一台机器上的数据目录。当前 SQLite 设计面向单机部署，不支持多机共享文件系统同时写入。
