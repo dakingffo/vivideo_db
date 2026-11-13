@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Path, Query
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from . import catalog_store
 from .model_configs import Space
@@ -21,6 +21,14 @@ def _strip(value):
 class TagName(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: Annotated[str, BeforeValidator(_strip), Field(min_length=1, max_length=30)]
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, name):
+        # SQLite length() only counts characters before the first NUL.
+        if '\x00' in name:
+            raise ValueError('标签名称不能包含空字符')
+        return name
 
 
 class VideoTags(BaseModel):
@@ -68,7 +76,7 @@ def catalog(
     )
 
 
-@router.put('/video-catalog/{video_id}/tags')
+@router.put('/video-catalog/{video_id:path}/tags')
 def replace_video_tags(
     space_id: Space,
     video_id: Annotated[str, Path(min_length=1, max_length=100)],

@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -234,12 +235,30 @@ class CatalogTests(unittest.TestCase):
             f'{roaming_catalog}/{video_id("a")}/tags', json={'tag_ids': [other_id]},
         ).status_code, 404)
 
+    def test_video_id_with_slash_can_be_classified(self):
+        custom_id = 'existing/video'
+        with storage.database('learning') as db:
+            db.execute(
+                'INSERT INTO videos(id, url, query, created) VALUES (?, ?, ?, ?)',
+                (custom_id, 'https://example.com/existing/video', 'fixture', CREATED),
+            )
+        encoded_id = quote(custom_id, safe='')
+        response = self.client.put(
+            f'{self.catalog_url}/{encoded_id}/tags', json={'tag_ids': [TAGS['入门']]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['video_id'], custom_id)
+        data = self.get_catalog(q=custom_id, tag_ids=TAGS['入门'])
+        self.assertEqual([item['video_id'] for item in data['items']], [custom_id])
+
     def test_validation(self):
-        for name in ['', '　\t', '长' * 31]:
+        for name in ['', '　\t', '长' * 31, '\x00', 'a\x00b']:
             with self.subTest(name=name):
                 self.assertEqual(self.client.post(self.tags_url, json={'name': name}).status_code, 422)
         self.assertEqual(self.client.post(self.tags_url, json={'name': '长' * 30 + ' '}).status_code, 201)
         self.assertEqual(self.client.post(self.tags_url, json={'name': 'valid', 'other': 1}).status_code, 422)
+        path = f'{self.tags_url}/{TAGS["数据库"]}'
+        self.assertEqual(self.client.patch(path, json={'name': 'a\x00b'}).status_code, 422)
         self.assertEqual(self.client.delete(f'{self.tags_url}/invalid').status_code, 422)
         self.assertEqual(self.client.get('/api/spaces/invalid/video-catalog').status_code, 422)
         invalid_queries = (
