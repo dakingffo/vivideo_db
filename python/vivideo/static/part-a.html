@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>视频目录 · ViVideo</title>
+  <link rel="stylesheet" href="part-a.css">
+  <script src="part-a.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-content">
+      <a class="brand" href="/" aria-label="ViVideo 首页"><span aria-hidden="true">V</span>ViVideo</a>
+      <label class="space-picker" for="space">当前空间
+        <select id="space">
+          <option value="learning">学习空间</option>
+          <option value="roaming">漫游空间</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1>视频目录</h1>
+    <div class="layout">
+      <aside class="panel tag-panel" aria-labelledby="tags-heading">
+        <h2 id="tags-heading">标签管理</h2>
+        <form id="create-tag" class="create-form">
+          <label for="new-tag">新标签名称</label>
+          <div class="form-row">
+            <input id="new-tag" type="text" placeholder="例如：数据库" required>
+            <button id="create-button" type="submit" class="primary">新建</button>
+          </div>
+        </form>
+        <p id="create-error" class="error" role="alert" hidden></p>
+        <p id="tag-status" class="status" role="status"></p>
+        <ul id="managed-tags" class="managed-tags" aria-label="标签及视频数量"></ul>
+      </aside>
+
+      <section class="panel directory" aria-label="视频检索">
+        <form id="search-form" class="search-form">
+          <label for="search">标题或作者</label>
+          <div class="form-row">
+            <input id="search" type="search" placeholder="搜索视频标题或作者">
+            <button type="submit" class="primary">搜索</button>
+          </div>
+        </form>
+
+        <div class="filter-row">
+          <label for="cache-state">缓存状态
+            <select id="cache-state">
+              <option value="">全部状态</option>
+              <option value="missing">未缓存</option>
+              <option value="queued">排队中</option>
+              <option value="downloading">下载中</option>
+              <option value="processing">处理中</option>
+              <option value="ready">已就绪</option>
+              <option value="failed">失败</option>
+            </select>
+          </label>
+          <label for="tag-mode">标签匹配
+            <select id="tag-mode">
+              <option value="all">全部匹配</option>
+              <option value="any">任一匹配</option>
+            </select>
+          </label>
+          <label class="check" for="untagged"><input type="checkbox" id="untagged">只看未分类</label>
+        </div>
+
+        <fieldset class="tag-filter">
+          <legend>按标签筛选</legend>
+          <div id="filter-tags" class="choices"></div>
+          <p id="filter-error" class="error" role="alert" hidden></p>
+        </fieldset>
+
+        <div class="results">
+          <div class="results-header">
+            <h2>视频列表</h2>
+            <p id="video-status" class="status" role="status"></p>
+          </div>
+          <div id="load-error" class="load-error" hidden>
+            <p id="load-error-message" class="error" role="alert"></p>
+            <button id="retry" type="button">重试</button>
+          </div>
+          <ul id="videos" class="videos" aria-label="视频列表"></ul>
+          <nav id="pagination" class="pagination" aria-label="目录分页" hidden>
+            <button id="previous" type="button">上一页</button>
+            <span id="page-status"></span>
+            <button id="next" type="button">下一页</button>
+          </nav>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="tag-dialog" aria-labelledby="tag-dialog-title">
+    <form id="tag-action-form">
+      <h2 id="tag-dialog-title"></h2>
+      <label id="rename-field" for="rename-tag">标签名称
+        <input id="rename-tag" type="text">
+      </label>
+      <p id="delete-message" hidden></p>
+      <p id="tag-action-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="cancel-tag-action" type="button">取消</button>
+        <button id="confirm-tag-action" type="submit" class="primary"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="video-dialog" aria-labelledby="video-dialog-title">
+    <form id="edit-video">
+      <h2 id="video-dialog-title">编辑标签</h2>
+      <p id="video-dialog-name" class="dialog-name"></p>
+      <fieldset id="edit-tag-fields" class="tag-filter">
+        <legend>选择标签（最多 20 个）</legend>
+        <div id="video-tag-choices" class="choices"></div>
+      </fieldset>
+      <p id="video-action-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="clear-tags" type="button" class="clear-button">清空勾选</button>
+        <button id="cancel-video-action" type="button">取消</button>
+        <button id="save-video-tags" type="submit" class="primary">保存标签</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

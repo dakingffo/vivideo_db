@@ -16,6 +16,7 @@ from .model_configs import router as model_configs_router
 from .state_api import router as state_router
 from .media import router as media_router
 from .library_api import router as library_router
+from .catalog_api import router as catalog_router
 from .storage import StateError
 from .service_status import router as service_status_router
 
@@ -26,6 +27,7 @@ app.include_router(state_router)
 app.include_router(media_router)
 app.include_router(service_status_router)
 app.include_router(library_router)
+app.include_router(catalog_router)
 app.mount('/static', StaticFiles(directory=STATIC), name='static')
 MODE = os.getenv('VIVIDEO_MODE', 'zmq')
 ENDPOINT = os.getenv('VIVIDEO_ZMQ_ENDPOINT', 'tcp://127.0.0.1:5555')
