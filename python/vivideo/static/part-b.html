@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>视频笔记 · ViVideo</title>
+  <link rel="stylesheet" href="/static/part-b.css">
+  <script src="/static/part-b.js" defer></script>
+</head>
+<body>
+  <header><a href="/">ViVideo</a><span>视频笔记</span><label>当前空间 <select id="space"><option value="learning">学习</option><option value="roaming">漫游</option></select></label></header>
+  <main>
+    <section class="library" aria-labelledby="library-heading">
+      <div class="section-heading"><div><p class="eyebrow">VIDEO NOTES</p><h1 id="library-heading">留住你的思考</h1></div><button id="new" disabled>新建笔记</button></div>
+      <p class="muted">为视频记录想法，每次保存都留下一个版本。</p>
+      <p id="videos-status" role="status"></p><button id="retry-videos" hidden>重试加载视频</button>
+      <form id="search-form">
+        <label>按视频筛选<select id="filter"><option value="">全部视频</option></select></label>
+        <label>搜索标题或正文<input id="search" type="search" maxlength="100" placeholder="输入关键词"></label>
+        <button type="submit">搜索</button>
+      </form>
+      <p id="list-status" role="status"></p><button id="retry-list" hidden>重试加载笔记</button>
+      <div id="notes" aria-label="笔记列表"></div>
+      <nav aria-label="笔记分页"><button id="prev" disabled>上一页</button><span id="page"></span><button id="next" disabled>下一页</button></nav>
+    </section>
+    <section class="workspace" aria-labelledby="editor-heading">
+      <h2 id="editor-heading">笔记详情</h2><p id="editor-empty" class="muted">从左侧打开笔记，或选择视频新建。</p>
+      <p id="editor-status" role="status" aria-live="polite"></p>
+      <button id="retry-note" hidden>重试打开笔记</button>
+      <form id="editor" hidden>
+        <label>所属视频<select id="video" required></select></label>
+        <p id="meta" class="muted"></p>
+        <label>标题 <span class="muted">最多 80 字</span><input id="title" required maxlength="80" autocomplete="off"></label>
+        <label>正文 <span class="muted">最多 10000 字，纯文本</span><textarea id="content" maxlength="10000" rows="12"></textarea></label>
+        <div id="conflict" role="alert" hidden><p>笔记已被其他页面修改，请复制当前内容后重新加载</p><button id="reload" type="button">重新加载</button></div>
+        <div class="actions"><button id="save" type="submit">保存</button><button id="cancel" type="button" class="secondary">取消</button><button id="delete" type="button" class="danger">删除笔记</button></div>
+      </form>
+      <section id="history" hidden aria-labelledby="history-heading"><div class="section-heading"><h2 id="history-heading">修改历史</h2><button id="refresh-history" class="secondary">刷新历史</button></div><p id="history-status" role="status"></p><div id="revisions"></div><nav aria-label="历史分页"><button id="history-prev" disabled>上一页</button><span id="history-page"></span><button id="history-next" disabled>下一页</button></nav></section>
+    </section>
+  </main>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-message"><p id="confirm-message"></p><div class="actions"><button id="confirm-no" class="secondary">保留，取消操作</button><button id="confirm-yes">确认</button></div></dialog>
+</body>
+</html>
