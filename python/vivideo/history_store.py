@@ -19,7 +19,8 @@ SELECT
     we.created, we.updated,
     COALESCE(NULLIF(ma.title, ''), v.id) AS title,
     MIN(we.watched_seconds, we.duration_seconds) AS counted_seconds,
-    MIN(CAST(we.watched_seconds AS REAL) / we.duration_seconds, 1.0) AS progress
+    MIN(CAST(we.watched_seconds AS REAL) / we.duration_seconds, 1.0) AS progress,
+    v.url
 FROM watch_events we
 JOIN videos v ON we.video_id = v.id
 LEFT JOIN media_assets ma ON v.id = ma.video_id
@@ -100,10 +101,10 @@ def get_history_page(db: sqlite3.Connection, from_ms: int, to_ms: int, keyword: 
     total = count_res[0][0]
     items = [
         {
-            "id": row[0], "video_id": row[1], "session_id": row[2],
+            "event_id": row[0], "video_id": row[1], "session_id": row[2],
             "watched_seconds": row[3], "duration_seconds": row[4],
             "created": row[5], "updated": row[6], "title": row[7],
-            "counted_seconds": row[8], "progress": row[9]
+            "counted_seconds": row[8], "progress": row[9], "url": row[10]
         } for row in list_res
     ]
     return {"total": total, "items": items}
@@ -139,6 +140,6 @@ def get_daily_stats(db: sqlite3.Connection, from_ms: int, to_ms: int) -> List[Di
     ensure_schema(db)
     res = _execute_read_transaction(db, [(SQL_DAILY_STATS, (from_ms, to_ms))])[0]
     return [
-        {"day": r[0], "event_count": r[1], "video_count": r[2], "watched_seconds": r[3]}
+        {"date": r[0], "event_count": r[1], "video_count": r[2], "watched_seconds": r[3]}
         for r in res
     ]
