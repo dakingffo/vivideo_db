@@ -99,17 +99,18 @@ async def main():
                             await page.locator('#watch-mount video').evaluate('(e)=>e.pause()');await page.locator('#close-watch').click()
                             await page.wait_for_timeout(450)
                             assert await page.locator('#message').input_value()=='播放后应保留的草稿'
-                            after=await page.locator('.composer-wrap').bounding_box();assert abs(composer['y']-after['y'])<1
+                            after=await page.locator('.composer-wrap').bounding_box();assert abs(composer['y']-after['y'])<1,(composer,after)
                             events=(await client.get('/api/spaces/learning/watch-events')).json()['events'];assert len(events)==1 and events[0]['watched_seconds']>events[0]['duration_seconds']/4,events
-                            await page.locator('[data-page=library]').click();await page.wait_for_selector('.cache-row');assert '可播放' in await page.locator('.cache-row').text_content()
-                            await page.locator('[data-cache-pin]').click();await page.wait_for_function('document.querySelector("[data-cache-pin]").dataset.pinned==="1"')
-                            await page.locator('[data-cache-delete]').click();await page.wait_for_function('document.querySelector("#cache-message").textContent.includes("取消保留")')
+                            await page.locator('[data-page=library]').click();await page.wait_for_selector('.catalog-card');assert '已就绪' in await page.locator('.catalog-card').first.text_content()
+                            await page.locator('[data-catalog-action=pin]').click();await page.wait_for_function('document.querySelector("[data-catalog-action=pin]").textContent==="取消保留"')
+                            page.once('dialog',lambda dialog: dialog.accept())
+                            await page.locator('[data-catalog-action=delete]').click();await page.wait_for_function('document.querySelector("#toast").textContent.includes("正在播放")')
                             await page.set_viewport_size({'width':390,'height':844});await page.wait_for_timeout(400)
                             assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                             await page.screenshot(path='/tmp/vivideo-local-library-mobile.png',full_page=True)
                             await page.locator('[data-page=discover]').click();await page.wait_for_timeout(600);await page.locator('#history-new').click();await page.wait_for_function('welcomeAnimations.length===0')
                             assert await page.evaluate('preparationEventKey')==''
-                            await page.evaluate('switchSpace("roaming")');await page.locator('[data-page=library]').click();await page.wait_for_function('document.querySelector("#local-cache-list").textContent.includes("还没有本地视频")')
+                            await page.evaluate('switchSpace("roaming")');await page.locator('[data-page=library]').click();await page.wait_for_function('document.querySelector("#library-grid").textContent.includes("还没有符合条件的视频")')
                             assert not errors,errors
                             await browser.close()
                             print('Browser passed: real gateway→ZMQ→model→MCP, first clarification, durable prefetch, real yt-dlp/FFmpeg pipeline, SSE selected-card promotion, cover, native playback, 25% watch event, stable input, pin/delete protection, mobile, new-session and space cleanup.')

@@ -4,7 +4,7 @@
 
 ## 模块开发任务
 
-以下文档是待实现需求，包含固定的数据表、接口、独立页面、实现顺序和验收用例：
+以下文档记录模块需求与验收合同，包括数据表、接口、页面、实现顺序和验收用例：
 
 | 模块 | 需求清单 |
 |---|---|
@@ -12,7 +12,7 @@
 | 视频笔记 | [Part B](desgin/partB.md) |
 | 观看历史与统计 | [Part C](desgin/partC.md) |
 
-各模块可使用独立测试数据开发；共同的 `app.py` 路由注册与主页面入口由负责人整合。当前数据库继续使用 SQLite，并保持空间隔离。
+视频目录已接入首页“我的资料库”，支持内容标签、筛选、分页及卡片内缓存操作。观看历史与统计已接入“偏好”页的长期兴趣下方，跟随左上角空间选择器隔离查询。笔记通过资料库每张视频卡片的“笔记”按钮弹窗编辑，支持保存、版本与冲突保护。三个原独立开发页面均已移除。数据库使用 SQLite，并保持空间隔离。
 
 ## 准备环境
 
@@ -107,6 +107,13 @@ python/vivideo/
 
 ```bash
 python -m unittest discover -s tests -v
+```
+
+资料库目录的浏览器验收（临时数据、真实网关，不需要模型或下载服务）：
+
+```bash
+PYTHONPATH=python python tests/browser_catalog.py
+PYTHONPATH=python python tests/browser_history.py
 ```
 
 观看计时使用独立 JavaScript 检查：

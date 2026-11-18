@@ -85,3 +85,8 @@ def replace_video_tags(
     return catalog_store.replace_video_tags(
         space_id, video_id, [str(tag_id) for tag_id in request.tag_ids],
     )
+
+
+@router.delete('/video-catalog/{video_id:path}', status_code=204)
+def delete_catalog_video(space_id: Space, video_id: Annotated[str, Path(min_length=1, max_length=100)]):
+    catalog_store.delete_catalog_video(space_id, video_id)

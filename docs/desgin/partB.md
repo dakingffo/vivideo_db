@@ -1,6 +1,6 @@
 # Part B：视频笔记
 
-状态：待实现的需求清单。本文中的新表、接口和页面目前尚未实现。
+状态：视频笔记已实现，并接入“我的资料库”视频卡片的“笔记”弹窗。原独立页面已移除，保存、版本记录和冲突保护继续使用空间数据库。下文为数据模型及接口合同。
 
 目标：用户能为视频保存多条笔记，搜索、修改、删除笔记，并查看修改历史。实现明确的笔记管理即可，不需要开发知识图谱、AI 总结或复杂编辑器。
 
@@ -32,14 +32,14 @@
 |---|---|
 | `python/vivideo/notes_store.py` | 建表、查询、保存与版本事务 |
 | `python/vivideo/notes_api.py` | 请求模型与接口，导出 `router` |
-| `python/vivideo/static/part-b.html` | 笔记管理页面 |
-| `python/vivideo/static/part-b.js` | 页面交互与接口请求 |
-| `python/vivideo/static/part-b.css` | 页面样式 |
+| `python/vivideo/static/index.html` | 视频笔记弹窗 |
+| `python/vivideo/static/video-notes.js` | 当前视频笔记的读取、编辑、保存和版本交互 |
+| `python/vivideo/static/library.css` | 与资料库一致的笔记弹窗样式 |
 | `tests/test_notes.py` | 本模块测试 |
 
 在 `app.py` 增加 `from .notes_api import router as notes_router` 和 `app.include_router(notes_router)`，保留其他注册。其他公共文件无需修改。联调前可用临时 `FastAPI()` 单独挂载本模块路由。
 
-页面地址 `/static/part-b.html`，只加载自己的 JS/CSS，不加载现有 `app.js`，不依赖 Part A、C。最终主页面入口由项目负责人统一接入。
+当前入口：首页 → 我的资料库 → 视频卡片 → 笔记。弹窗绑定当前空间和视频，支持已有多条笔记及新建、保存、删除与修改记录。关闭未保存的编辑时确认放弃，冲突时保留当前输入并提供重新加载。原独立笔记列表页及视频详情中的浏览器本地笔记编辑器已移除；当前视频没有数据库笔记但浏览器保留旧笔记时，弹窗预填旧内容，点击保存后才写入数据库。
 
 ## 4. 数据表：按以下定义实现
 
@@ -168,7 +168,7 @@ WHERE id = ? AND version = ?;
 VIVIDEO_DATA_DIR=./data PYTHONPATH=python python -m uvicorn vivideo.app:app --host 127.0.0.1 --port 8001
 ```
 
-打开 `http://127.0.0.1:8001/static/part-b.html`。不依赖模型、下载服务或其他模块。
+打开 `http://127.0.0.1:8001/`，进入“我的资料库”并点击视频卡片上的“笔记”。不依赖模型、下载服务或其他模块。
 
 测试通过临时 `VIVIDEO_DATA_DIR` 隔离数据，用 `storage.database('learning')` 建立基础表并插入视频：
 

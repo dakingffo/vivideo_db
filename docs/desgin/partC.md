@@ -1,6 +1,6 @@
 # Part C：观看历史与统计
 
-状态：待实现的需求清单。观看记录写入能力已存在；本文的新历史查询、统计接口和页面尚未实现。
+状态：观看历史和统计已实现，并接入首页“偏好”页，位于长期兴趣下方。使用主应用的空间选择器，原独立页面已移除。下文保留统计口径与接口验收合同。
 
 目标：把已有观看记录展示为可筛选、分页和删除的历史列表，并用 SQL 计算观看概览、每日统计和视频排行。重点是清晰的查询与统计，不开发新的播放器或推荐算法。
 
@@ -44,14 +44,14 @@
 |---|---|
 | `python/vivideo/history_store.py` | 历史查询、删除、统计 SQL 与索引初始化 |
 | `python/vivideo/history_api.py` | 查询参数、时间范围校验与路由，导出 `router` |
-| `python/vivideo/static/part-c.html` | 观看历史与统计页面 |
-| `python/vivideo/static/part-c.js` | 页面交互和接口请求 |
-| `python/vivideo/static/part-c.css` | 页面样式 |
+| `python/vivideo/static/index.html` | 偏好页长期兴趣下方的历史与统计区 |
+| `python/vivideo/static/watch-history.js` | 查询、搜索、删除及空间切换处理 |
+| `python/vivideo/static/watch-history.css` | 与主应用配色一致的统计与历史样式 |
 | `tests/test_history.py` | 本模块测试 |
 
 在 `app.py` 增加 `from .history_api import router as history_router` 和 `app.include_router(history_router)`，保留其他注册。除此之外不需要修改公共代码。可在测试中建立临时 `FastAPI()` 单独挂载本模块路由。
 
-页面地址 `/static/part-c.html`，只加载自己的 JS/CSS，不加载现有 `app.js`。不依赖 Part A、B。最终主页面入口由负责人统一接入。
+页面入口：首页 → 偏好 → 长期兴趣下方。页面跟随主应用的空间选择器，不另设空间下拉框。查询期间仅更新本区域，不禁用其他导航或兴趣编辑。功能不依赖 Part A、B。
 
 所有查询使用 `storage.database(space)` 打开当前空间的 `space.db`。继续使用 SQLite 和原生前端。
 
@@ -200,7 +200,7 @@ ORDER BY day;
 VIVIDEO_DATA_DIR=./data PYTHONPATH=python python -m uvicorn vivideo.app:app --host 127.0.0.1 --port 8001
 ```
 
-打开 `http://127.0.0.1:8001/static/part-c.html`。测试不依赖模型、下载、真实播放或其他模块。
+打开 `http://127.0.0.1:8001/` 后进入“偏好”。测试不依赖模型、下载、真实播放或其他模块。
 
 自动化测试设置临时 `VIVIDEO_DATA_DIR`，通过 `storage.database('learning')` 初始化基础表，使用绑定参数插入视频 `demo-video-a`（`SQL 入门`，100 秒）和 `demo-video-b`（`事务基础`，120 秒）。插入 `videos` 时填齐 `id,url,query,created`，`query='fixture'`；URL 分别为 `https://example.com/video/a`、`https://example.com/video/b`。标题和时长插入 `media_assets`；不下载这些地址。
 
@@ -219,7 +219,7 @@ VIVIDEO_DATA_DIR=./data PYTHONPATH=python python -m uvicorn vivideo.app:app --ho
 1. 完成统一时间范围解析与校验，固定北京时间归组。
 2. 编写历史 JOIN、总数、分页查询和删除。
 3. 实现概览、每日聚合及排行 SQL，用固定数据核对数字。
-4. 实现接口，再做独立页面，最后注册主应用路由。
+4. 实现接口，再接入偏好页，并验证主应用空间切换。
 5. 完成验收及索引查询计划说明。
 
 ## 11. 必须通过的验收清单
@@ -237,7 +237,7 @@ VIVIDEO_DATA_DIR=./data PYTHONPATH=python python -m uvicorn vivideo.app:app --ho
 - [ ] 查询与页面不访问真实网络；切换空间、筛选时迟到的响应不覆盖新结果。
 - [ ] 提供至少一条实际 SQL 的索引前后 `EXPLAIN QUERY PLAN`，说明是否使用及其原因。
 
-运行：`python -m unittest discover -s tests -p 'test_history.py' -v`。测试只使用临时数据目录。
+运行：`python -m unittest discover -s tests -p 'test_history.py' -v`。测试只使用临时数据目录。浏览器验收：`PYTHONPATH=python python tests/browser_history.py`。
 
 ## 12. 交付清单
 

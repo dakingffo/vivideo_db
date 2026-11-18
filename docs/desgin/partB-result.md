@@ -1,6 +1,8 @@
 # Part B：视频笔记实现结果
 
-独立页面：`/static/part-b.html`。使用当前空间的 `space.db` 持久化笔记，不依赖模型、下载服务或 Part A/C。公共代码仅在 `app.py` 导入并注册 `notes_router`；原有页面与入口保持原状。
+当前入口为首页“我的资料库”的视频卡片笔记弹窗，原独立页面已移除。下文截图为初始模块验收记录；最新浏览器验收运行 `PYTHONPATH=python python tests/browser_catalog.py`，覆盖保存、版本、双窗口冲突、未保存保护及删除。
+
+独立页面：`/`。使用当前空间的 `space.db` 持久化笔记，不依赖模型、下载服务或 Part A/C。公共代码仅在 `app.py` 导入并注册 `notes_router`；原有页面与入口保持原状。
 
 ## 数据关系与约束
 

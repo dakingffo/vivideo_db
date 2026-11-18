@@ -1,6 +1,12 @@
 # Part A：视频目录与标签检索
 
-状态：待实现的需求清单。本文的新表、接口和页面目前尚未实现。
+状态：分类与目录已实现，并接入首页“我的资料库”。以下保留分类接口与数据模型的任务合同；页面与缓存操作以本节最新接入说明为准。
+
+当前入口：首页 → 我的资料库。独立 `part-a.html/css/js` 已移除，页面使用 `index.html`、`library.css`、`catalog.js`，沿用主应用的空间切换与视频卡片。资料库下方只保留链接下载和空间缓存配额，缓存状态、保留、重试、取消与删除统一到目录卡片。
+
+新增 `DELETE /api/spaces/{space_id}/video-catalog/{video_id}`：取消该视频的排队/运行中下载，撤销保留，清理媒体和附件、标签关联，并从目录隐藏。正在播放时返回 `409` 且操作回滚。保留供笔记与观看历史引用的视频记录，不删除笔记或观看记录。不存在或已删除返回 `404`，成功返回无响应体的 `204`。
+
+目录浏览器验收：`PYTHONPATH=python python tests/browser_catalog.py`。下文列出分类功能的完整合同。
 
 目标：为当前空间已有的视频建立可维护的内容分类，用户可以给视频设置标签，并按关键词、多个标签及缓存状态查找视频。现有收藏功能继续使用，本模块不再开发收藏夹。
 
@@ -28,7 +34,7 @@
 
 用户在独立页面中完成以下操作即可验收：创建“数据库”“入门”两个标签 → 给已有视频勾选标签 → 使用全部匹配查到该视频 → 修改或清空标签 → 删除标签。
 
-视频来源与缓存状态以现有数据为准。本模块不创建视频、不下载视频、不删除视频或文件；标签改动也不改变缓存的“保留”状态。
+视频来源与缓存状态以现有数据为准。分类操作不创建视频或触发下载，标签改动不改变缓存的“保留”状态。目录卡片的下载、保留与删除则按统一缓存操作执行。
 
 ## 3. 先阅读这些代码
 
@@ -50,14 +56,14 @@
 |---|---|
 | `python/vivideo/catalog_store.py` | 建表、参数化 SQL、关联维护和目录查询 |
 | `python/vivideo/catalog_api.py` | 请求校验和接口，导出 `router` |
-| `python/vivideo/static/part-a.html` | 视频目录与标签管理页面 |
-| `python/vivideo/static/part-a.js` | 页面交互与接口请求 |
-| `python/vivideo/static/part-a.css` | 页面样式 |
+| `python/vivideo/static/index.html` | 首页“我的资料库”目录、筛选与标签弹窗 |
+| `python/vivideo/static/catalog.js` | 目录交互、标签与卡片内缓存操作 |
+| `python/vivideo/static/library.css` | 统一工具栏、卡片、标签弹窗及下载面板样式 |
 | `tests/test_catalog.py` | 本模块测试 |
 
 在 `app.py` 增加 `from .catalog_api import router as catalog_router` 与 `app.include_router(catalog_router)`，保留其他注册。其他公共文件不需要修改，不改写现有 `/videos` 或 `/local-videos` 接口。
 
-页面地址 `/static/part-a.html`，只加载自己的 JS/CSS，不加载现有 `app.js`。它不依赖 Part B、C。最终主页面入口由负责人统一接入。
+页面入口为首页“我的资料库”，使用主应用空间切换、配色、卡片和播放器，`catalog.js` 管理内容目录。它不依赖 Part B、C，原独立开发页面已移除。
 
 ## 5. 数据表：新增两张即可
 
@@ -110,6 +116,7 @@ CREATE INDEX IF NOT EXISTS idx_catalog_videos_created
 | `author` | `COALESCE(media_assets.author, '')` |
 | `duration_seconds` | `media_assets.duration > 0` 时为实际值，否则为 `null` |
 | `cache_state` | `COALESCE(media_assets.state, 'missing')` |
+| `pinned`、`bytes` | 当前视频的缓存保留状态和实际缓存字节数，无资产时为 `false`、0 |
 | `tags` | 本视频完整标签数组，按 `name ASC, id ASC` 排序 |
 
 **`cache_state='evicted'` 的视频始终隐藏**，即使它带有标签或关键词命中也不能重新出现。标签列表中的 `video_count` 同样不统计已清理视频。针对已清理视频设置标签返回 `404`。
@@ -252,7 +259,7 @@ ORDER BY v.created DESC, v.id ASC;
 VIVIDEO_DATA_DIR=./data PYTHONPATH=python python -m uvicorn vivideo.app:app --host 127.0.0.1 --port 8001
 ```
 
-打开 `http://127.0.0.1:8001/static/part-a.html`。不需要模型 API、下载 Worker、真实媒体文件或 Part B、C。
+打开 `http://127.0.0.1:8001/` 后进入“我的资料库”。不需要模型 API、下载 Worker、真实媒体文件或 Part B、C。
 
 自动化测试使用临时 `VIVIDEO_DATA_DIR`，通过 `storage.database('learning')` 建立已有基础表。以下是固定样例，使用不同 UUID 表示标签“数据库”“入门”“实战”；`videos.query='fixture'`，`created` 统一为 `1704038400000`：
 
@@ -282,7 +289,7 @@ VIVIDEO_DATA_DIR=./data PYTHONPATH=python python -m uvicorn vivideo.app:app --ho
 1. 完成两张表、索引、标签增删改查，验证唯一和外键约束。
 2. 实现单个视频的完整标签集合保存，先验证回滚和重复 ID。
 3. 实现目录 JOIN、未分类、单标签与多标签筛选，最后加分页和计数。
-4. 实现接口与独立页面，核对固定样例，最后注册主应用路由。
+4. 实现接口并接入资料库，核对固定样例与缓存删除，再注册主应用路由。
 5. 完成验收及数据库结果说明。
 
 ## 13. 必须通过的验收清单

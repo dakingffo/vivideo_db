@@ -33,6 +33,17 @@ app.include_router(service_status_router)
 app.include_router(library_router)
 app.include_router(catalog_router)
 app.mount('/static', StaticFiles(directory=STATIC), name='static')
+
+
+@app.middleware('http')
+async def revalidate_frontend(request, call_next):
+    response = await call_next(request)
+    if request.url.path == '/' or request.url.path.startswith('/static/'):
+        # HTML and JS must agree on DOM IDs after an editable-source update.
+        # Conditional requests still reuse unchanged assets through their ETags.
+        response.headers['Cache-Control'] = 'no-cache'
+    return response
+
 MODE = os.getenv('VIVIDEO_MODE', 'zmq')
 ENDPOINT = os.getenv('VIVIDEO_ZMQ_ENDPOINT', 'tcp://127.0.0.1:5555')
 

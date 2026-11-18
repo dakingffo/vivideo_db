@@ -176,7 +176,7 @@ function compactCard(v){
  const id=escapeHTML(v.id);
  return `<article class="card compact-card ${v.url?'video-card':''}">${coverMarkup(v)}<div class="card-body"><h3 title="${escapeHTML(v.title)}">${escapeHTML(v.title)}</h3><div class="card-actions"><button data-action="detail" data-id="${id}">查看详情 ↗</button><button data-action="save" data-id="${id}" class="${saved[v.id]?'selected':''}" aria-label="${saved[v.id]?'取消收藏':'收藏'} ${escapeHTML(v.title)}">${saved[v.id]?'★ 已收藏':'☆ 收藏'}</button></div></div></article>`;
 }
-function render(){ document.querySelectorAll('.bubble-results').forEach(el=>{renderShelf(el,el.parentElement._videos)}); $('#detail [data-action=like]')?.classList.toggle('selected',feedback[$('#detail [data-action=like]').dataset.id]==='like');$('#detail [data-action=dislike]')?.classList.toggle('selected',feedback[$('#detail [data-action=dislike]').dataset.id]==='dislike'); renderShelf($('#video-grid'),freshVideos());$('#library-grid').innerHTML=Object.values(saved).map(card).join('')||'<div class="empty">你的资料库还空着。<br>在对话发现中收藏一条视频，从这里开始积累。</div>';$('#saved-count').textContent=Object.keys(saved).length;renderTags();hydrateCovers($('#library-grid'));syncStageSize()}
+function render(){ document.querySelectorAll('.bubble-results').forEach(el=>{renderShelf(el,el.parentElement._videos)}); $('#detail [data-action=like]')?.classList.toggle('selected',feedback[$('#detail [data-action=like]').dataset.id]==='like');$('#detail [data-action=dislike]')?.classList.toggle('selected',feedback[$('#detail [data-action=dislike]').dataset.id]==='dislike'); renderShelf($('#video-grid'),freshVideos());window.videoCatalog?.rerender();renderTags();hydrateCovers($('#library-grid'));syncStageSize()}
 let navigationVersion=0;
 async function navigate(target){
  if(spaceTransition||target===page)return;
@@ -194,7 +194,7 @@ async function navigate(target){
   try{await outgoing.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:`translateX(${-direction*35}px)`}],{duration:170,easing:'ease-in'}).finished}catch{}
  }
  if(version!==navigationVersion)return;
- outgoing.classList.add('hidden');incoming.classList.remove('hidden');
+ outgoing.classList.add('hidden');incoming.classList.remove('hidden');if(target==='library')refreshLocalCache();if(target==='profile')window.watchHistory?.refresh();
  if(!reducedMotion.matches){
   incoming.animate([{opacity:0,transform:`translateX(${direction*40}px)`},{opacity:1,transform:'translateX(0)'}],{duration:300,easing:'cubic-bezier(.2,.7,.2,1)'});
   if(target==='discover')$('.history-sidebar').animate([{opacity:0,transform:'translateX(25px)'},{opacity:1,transform:'translateX(0)'}],{duration:420,easing:'ease-out'});
@@ -249,9 +249,9 @@ $('#tags').onclick=async e=>{
  const button=e.target.closest('[data-trait]');if(!button)return;const origin=spaceId;button.disabled=true;
  try{await stateAPI(origin,'/traits/'+button.dataset.trait,{method:'DELETE'});if(origin!==spaceId)return;spaceTraits=spaceTraits.filter(t=>t.id!==button.dataset.trait);tags=spaceTraits.map(t=>t.text);persist('traits',spaceTraits);persist('tags',tags);render()}catch(error){button.disabled=false;toast(error.message)}
 };
-document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(!b)return;const v=b.closest('.bubble')?._videos?.find(v=>v.id===b.dataset.id)||b.closest('#detail')?._video||videos.find(v=>v.id===b.dataset.id)||saved[b.dataset.id]||localCacheVideos.get(b.dataset.id)||freshVideos().find(v=>v.id===b.dataset.id);if(!v)return;const action=b.dataset.action;if(action==='save'){if(saved[v.id]){delete saved[v.id];toast('已取消收藏')}else{saved[v.id]=v;toast('已加入我的资料库')}persist('saved',saved);if(v.local)stateAPI(spaceId,'/local-videos/'+encodeURIComponent(v.id),{method:'PATCH',body:JSON.stringify({pinned:Boolean(saved[v.id])})}).catch(error=>toast(error.message));render()}else if(action==='like'||action==='dislike'){feedback[v.id]=feedback[v.id]===action?null:action;persist('feedback',feedback);render();toast('反馈已保存在本地，后端接入后可用于画像更新')}else if(action==='detail'){showDetail(v)}else if(action==='watch'){startWatch(v,b)}});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(!b)return;const v=b.closest('.bubble')?._videos?.find(v=>v.id===b.dataset.id)||b.closest('#detail')?._video||videos.find(v=>v.id===b.dataset.id)||saved[b.dataset.id]||window.videoCatalog?.find(b.dataset.id)||localCacheVideos.get(b.dataset.id)||freshVideos().find(v=>v.id===b.dataset.id);if(!v)return;const action=b.dataset.action;if(action==='save'){if(saved[v.id]){delete saved[v.id];toast('已取消收藏')}else{saved[v.id]=v;toast('已加入我的资料库')}persist('saved',saved);if(v.local)stateAPI(spaceId,'/local-videos/'+encodeURIComponent(v.id),{method:'PATCH',body:JSON.stringify({pinned:Boolean(saved[v.id])})}).catch(error=>toast(error.message));render()}else if(action==='like'||action==='dislike'){feedback[v.id]=feedback[v.id]===action?null:action;persist('feedback',feedback);render();toast('反馈已保存在本地，后端接入后可用于画像更新')}else if(action==='detail'){showDetail(v)}else if(action==='watch'){startWatch(v,b)}});
 function videoDestination(v){try{const url=new URL(v.url);if(['https:','http:'].includes(url.protocol))return url.href}catch{}return 'https://search.bilibili.com/all?keyword='+encodeURIComponent(v.title)}
-function showDetail(v){$('#detail')._video=v;$('#detail-content').innerHTML=`<span class="eyebrow">VIDEO NOTES</span><h2 style="margin-top:20px">${escapeHTML(v.title)}</h2>${v.url?`<button type="button" class="primary" data-action="watch" data-id="${escapeHTML(v.id)}">在这里播放 ▶</button>`:''}<p>${escapeHTML(v.summary)}</p><p>${escapeHTML(v.author)}${v.minutes?' · '+escapeHTML(v.minutes)+' 分钟':''}${v.level?' · '+escapeHTML(v.level):''}</p><div class="card-tags"><span>${escapeHTML(v.category)}</span><span>${escapeHTML(v.style)}</span></div><p class="detail-reason">✦ 推荐理由<br>${escapeHTML(v.reason||'示例推荐：探索 AI 与工程实践，找到下一步学习方向。')}</p><div class="card-actions detail-feedback"><button data-action="like" data-id="${escapeHTML(v.id)}" class="${feedback[v.id]==='like'?'selected':''}">♡ 喜欢</button><button data-action="dislike" data-id="${escapeHTML(v.id)}" class="${feedback[v.id]==='dislike'?'selected':''}">− 不感兴趣</button></div><label for="note">我的学习笔记</label><textarea id="note" placeholder="记下你想学的内容或观看心得…"></textarea><button id="save-note" class="primary">保存笔记</button><br><a class="external" target="_blank" rel="noopener noreferrer" href="${escapeHTML(videoDestination(v))}">${v.url?'打开原视频 ↗':'在 Bilibili 搜索此主题 ↗'}</a><p style="font-size:10px">${v.url?'来自网络搜索，内容与可用性以来源平台为准。':'当前为虚构示例元数据，搜索链接不代表已核验的视频来源。'}</p>`;$('#note').value=notes[v.id]||'';$('#save-note').onclick=()=>{notes[v.id]=$('#note').value;persist('notes',notes);toast('笔记已保存')};$('#detail').showModal()}
+function showDetail(v){$('#detail')._video=v;$('#detail-content').innerHTML=`<span class="eyebrow">VIDEO DETAILS</span><h2 style="margin-top:20px">${escapeHTML(v.title)}</h2>${v.url?`<button type="button" class="primary" data-action="watch" data-id="${escapeHTML(v.id)}">在这里播放 ▶</button>`:''}<p>${escapeHTML(v.summary)}</p><p>${escapeHTML(v.author)}${v.minutes?' · '+escapeHTML(v.minutes)+' 分钟':''}${v.level?' · '+escapeHTML(v.level):''}</p><div class="card-tags"><span>${escapeHTML(v.category)}</span><span>${escapeHTML(v.style)}</span></div><p class="detail-reason">✦ 推荐理由<br>${escapeHTML(v.reason||'示例推荐：探索 AI 与工程实践，找到下一步学习方向。')}</p><div class="card-actions detail-feedback"><button data-action="like" data-id="${escapeHTML(v.id)}" class="${feedback[v.id]==='like'?'selected':''}">♡ 喜欢</button><button data-action="dislike" data-id="${escapeHTML(v.id)}" class="${feedback[v.id]==='dislike'?'selected':''}">− 不感兴趣</button></div><br><a class="external" target="_blank" rel="noopener noreferrer" href="${escapeHTML(videoDestination(v))}">${v.url?'打开原视频 ↗':'在 Bilibili 搜索此主题 ↗'}</a><p style="font-size:10px">${v.url?'来自网络搜索，内容与可用性以来源平台为准。':'当前为虚构示例元数据，搜索链接不代表已核验的视频来源。'}</p>`;$('#detail').showModal()}
 $('#close-detail').onclick=()=>$('#detail').close();$('#detail').onclick=e=>{if(e.target===$('#detail')){const r=$('#detail').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('#detail').close()}};
 function renderSpaceMenu(){
  $('#space-options').innerHTML=SPACES.map(s=>`<button class="space-option ${s.id===spaceId?'selected':''}" data-space="${s.id}" style="--option-hue:${s.hue}" aria-pressed="${s.id===spaceId}"><span class="space-option-icon">${s.icon}</span><span><strong>${s.name}</strong><small>${s.description}</small></span><span class="space-check">${s.id===spaceId?'✓':''}</span></button>`).join('');
@@ -287,12 +287,14 @@ function loadSpace(){
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('hidden',el.id!==page));
  document.querySelectorAll('.nav').forEach(el=>el.classList.toggle('active',el.dataset.page===page));
  $('#page-title').textContent={discover:'对话发现',library:'我的资料库',profile:'偏好'}[page];
- updateSpaceIdentity();updateResultHeading();render();renderSessions();refreshServiceStatus();
+ updateSpaceIdentity();window.videoCatalog?.setSpace();window.watchHistory?.setSpace();window.videoNotes?.setSpace();updateResultHeading();render();renderSessions();refreshServiceStatus();
  setShelfPosition($('#video-grid'),view?.trackScroll||0);
  return view?.scrollY||0;
 }
 async function switchSpace(target){
- if(target===spaceId||spaceTransition||!ready)return;
+ if(target===spaceId||spaceTransition)return;
+ if(!ready){toast('页面还未加载完成，请刷新后重试');return;}
+ if(window.videoNotes&&!window.videoNotes.canLeave())return;
  closeWatch({immediate:true,restoreFocus:false});spaceTransition=true;setSpaceMenu(false);stopExplore();stashSpace();
  const remote=mode==='zmq'?fetchRemoteSpace(target).then(data=>({data}),error=>({error})):null;cancelPendingTurn();failedTurn=null;
  requestController?.abort();requestController=null;pendingMessage='';busy=false;$('#send').disabled=false;
@@ -747,24 +749,19 @@ function applyPreparation(data){
 document.addEventListener('visibilitychange',()=>syncPreparationEvents());
 window.addEventListener('pagehide',stopPreparationEvents);
 function formatBytes(bytes){return bytes>=1024**3?(bytes/1024**3).toFixed(1)+' GB':(bytes/1024**2).toFixed(1)+' MB'}
-let localCacheLoading=false,cacheSpace='',cacheLastTime=0;
+let cacheSpace='',cacheLastTime=0,cacheRequest=0,cachePending=null;
 async function refreshLocalCache(){
- if(localCacheLoading||mode!=='zmq')return;localCacheLoading=true;const origin=spaceId;
+ if(mode!=='zmq'||cachePending?.origin===spaceId)return;const origin=spaceId,version=++cacheRequest;
+ const ticket={origin,version};cachePending=ticket;
  try{
   const [cache,result]=await Promise.all([stateAPI(origin,'/cache'),stateAPI(origin,'/local-videos')]);
-  if(origin!==spaceId)return;cacheSpace=origin;cacheLastTime=Date.now();
+  if(origin!==spaceId||version!==cacheRequest)return;cacheSpace=origin;cacheLastTime=Date.now();
   localCacheVideos.clear();result.videos.forEach(v=>localCacheVideos.set(v.id,v));
   $('#cache-summary').textContent=`已使用 ${formatBytes(cache.used_bytes)} / ${formatBytes(cache.quota_bytes)} · 下载预留 ${formatBytes(cache.reserved_bytes)}`;
   if(document.activeElement!==$('#cache-quota'))$('#cache-quota').value=Math.round(cache.quota_bytes/1024**3);
-  const labels={missing:'待准备',queued:'等待下载',downloading:'下载中',processing:'处理中',ready:'可播放',failed:'下载失败'};
-  $('#local-cache-list').innerHTML=cache.assets.filter(a=>a.state!=='evicted').map(a=>{
-   const job=cache.jobs.find(j=>j.kind==='download'&&j.target===a.video_id&&['queued','running'].includes(j.status));
-   const latestJob=cache.jobs.find(j=>j.kind==='download'&&j.target===a.video_id);
-   const failure=job?.error||(a.state==='failed'?latestJob?.error:'');
-   return `<article class="cache-row"><div><strong>${escapeHTML(a.title||'正在获取视频信息')}</strong><small>${labels[a.state]||a.state} · ${formatBytes(a.bytes)}${failure?' · '+escapeHTML(failure):''}</small></div><div class="cache-actions">${a.state==='ready'?`<button class="text-button" data-action="watch" data-id="${escapeHTML(a.video_id)}">播放</button>`:''}<button class="text-button" data-cache-pin="${escapeHTML(a.video_id)}" data-pinned="${a.pinned?'1':'0'}">${a.pinned?'取消保留':'保留'}</button>${job?`<button class="text-button" data-cache-cancel="${job.id}">取消下载</button>`:['failed','missing'].includes(a.state)?`<button class="text-button" data-cache-retry="${escapeHTML(a.video_id)}">重新下载</button>`:''}<button class="text-button" data-cache-delete="${escapeHTML(a.video_id)}">清理</button></div></article>`;
-  }).join('')||'<p class="cache-empty">当前空间还没有本地视频。提出一个感兴趣的领域，或粘贴视频链接开始准备。</p>';
- }catch(error){if(origin===spaceId)$('#cache-message').textContent=error.message}
- finally{localCacheLoading=false}
+  window.videoCatalog?.setCache(cache);await window.videoCatalog?.refresh();
+ }catch(error){if(origin===spaceId&&version===cacheRequest)$('#cache-message').textContent=error.message}
+ finally{if(cachePending===ticket)cachePending=null}
 }
 $('#refresh-cache').onclick=refreshLocalCache;
 $('#import-video-form').onsubmit=async event=>{
@@ -775,17 +772,6 @@ $('#import-video-form').onsubmit=async event=>{
 $('#cache-quota-form').onsubmit=async event=>{
  event.preventDefault();const origin=spaceId;
  try{await stateAPI(origin,'/cache',{method:'PUT',body:JSON.stringify({quota_bytes:Number($('#cache-quota').value)*1024**3})});if(origin===spaceId){$('#cache-message').textContent='缓存上限已更新';refreshLocalCache()}}catch(error){if(origin===spaceId)$('#cache-message').textContent=error.message}
-};
-$('#local-cache-list').onclick=async event=>{
- const button=event.target.closest('[data-cache-pin],[data-cache-delete],[data-cache-retry],[data-cache-cancel]');if(!button)return;
- const origin=spaceId;button.disabled=true;
- try{
-  if(button.dataset.cachePin)await stateAPI(origin,'/local-videos/'+encodeURIComponent(button.dataset.cachePin),{method:'PATCH',body:JSON.stringify({pinned:button.dataset.pinned!=='1'})});
-  else if(button.dataset.cacheDelete)await stateAPI(origin,'/local-videos/'+encodeURIComponent(button.dataset.cacheDelete),{method:'DELETE'});
-  else if(button.dataset.cacheRetry)await stateAPI(origin,'/local-videos/'+encodeURIComponent(button.dataset.cacheRetry)+'/download',{method:'POST'});
-  else await stateAPI(origin,'/download-jobs/'+button.dataset.cacheCancel+'/cancel',{method:'POST'});
-  if(origin===spaceId)await refreshLocalCache();
- }catch(error){if(origin===spaceId)$('#cache-message').textContent=error.message}finally{button.disabled=false}
 };
 setInterval(()=>{if(ready&&page==='library'&&!document.hidden&&(cacheSpace!==spaceId||Date.now()-cacheLastTime>2500))refreshLocalCache()},500);
 

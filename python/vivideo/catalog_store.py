@@ -181,11 +181,28 @@ def query_catalog(space, *, q='', tag_ids=(), tag_mode='all', untagged=False,
         rows = db.execute(
             f'''SELECT v.id AS video_id, v.url, v.created, {_TITLE} AS title,
                        {_AUTHOR} AS author, CASE WHEN a.duration > 0 THEN a.duration END AS duration_seconds,
-                       {_CACHE_STATE} AS cache_state
+                       {_CACHE_STATE} AS cache_state, COALESCE(a.pinned, 0) AS pinned, COALESCE(a.bytes, 0) AS bytes
                 {_VIDEO_SOURCE} WHERE {where}
                 ORDER BY v.created DESC, v.id ASC LIMIT ? OFFSET ?''',
             [*args, limit, offset],
         ).fetchall()
         tags = _tags_for_videos(db, [row['video_id'] for row in rows])
-        items = [dict(row, tags=tags[row['video_id']]) for row in rows]
+        items = [dict(row, pinned=bool(row['pinned']), tags=tags[row['video_id']]) for row in rows]
         return {'items': items, 'total': total, 'limit': limit, 'offset': offset}
+
+
+def delete_catalog_video(space, video_id):
+    """Hide the directory entry and revoke downloads before removing its assets."""
+    from . import library
+    with database(space) as db:
+        ensure_schema(db)
+        db.execute('BEGIN IMMEDIATE')
+        if not db.execute(f'SELECT 1 {_VIDEO_SOURCE} WHERE v.id=? AND {_VISIBLE}', (video_id,)).fetchone():
+            raise StateError('视频不在当前空间中或已删除', 404)
+        db.execute('INSERT OR IGNORE INTO media_assets(video_id) VALUES (?)', (video_id,))
+        row = db.execute('SELECT * FROM media_assets WHERE video_id=?', (video_id,)).fetchone()
+        # Workers check running status again while holding this same writer lock.
+        db.execute("UPDATE download_jobs SET status='cancelled',reserved=0 WHERE kind='download' AND target=? AND status IN ('queued','running')", (video_id,))
+        library.remove_asset(db, space, row)
+        db.execute('UPDATE media_assets SET pinned=0 WHERE video_id=?', (video_id,))
+        db.execute('DELETE FROM catalog_video_tags WHERE video_id=?', (video_id,))

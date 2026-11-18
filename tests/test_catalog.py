@@ -209,7 +209,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(data, {
             'video_id': video_id('d'), 'url': 'https://example.com/video/d', 'created': CREATED,
             'title': video_id('d'), 'author': '', 'duration_seconds': None,
-            'cache_state': 'missing', 'tags': [],
+            'cache_state': 'missing', 'tags': [], 'pinned': False, 'bytes': 0,
         })
         self.assertEqual(self.set_tags('d', TAGS['数据库']).status_code, 200)
         self.assert_videos('d', tag_ids=TAGS['数据库'], cache_state='missing')
@@ -294,5 +294,48 @@ class CatalogTests(unittest.TestCase):
         self.assert_videos('', q="' OR 1=1 --")
 
     def test_static_page_is_served_by_gateway(self):
+        self.assertIn('catalog.js', self.client.get('/').text)
+        self.assertEqual(self.client.get('/static/catalog.js').status_code, 200)
         for name in ('part-a.html', 'part-a.js', 'part-a.css'):
-            self.assertEqual(self.client.get('/static/' + name).status_code, 200)
+            self.assertEqual(self.client.get('/static/' + name).status_code, 404)
+
+    def test_delete_removes_pinned_cache_and_revokes_running_download(self):
+        from pathlib import Path
+        from vivideo import library, notes_store
+        vid=video_id('a')
+        note=notes_store.create_note('learning',vid,'keep note','content')
+        asset=library.root('learning')/'assets'/'fixture'
+        asset.mkdir(parents=True)
+        for name in ['video.mp4','cover.jpg','subtitles.vtt']:(asset/name).write_bytes(b'cached')
+        with storage.database('learning') as db:
+            db.execute("UPDATE media_assets SET pinned=1,bytes=18,relative_path='assets/fixture/video.mp4',thumbnail_path='assets/fixture/cover.jpg',subtitle_path='assets/fixture/subtitles.vtt' WHERE video_id=?",(vid,))
+            db.execute("INSERT INTO download_jobs(id,kind,target,status,reserved,created,updated) VALUES ('delete-job','download',?,'running',100,0,0)",(vid,))
+        response=self.client.delete('/api/spaces/learning/video-catalog/'+vid)
+        self.assertEqual(response.status_code,204)
+        self.assertEqual(response.content,b'')
+        self.assertFalse(asset.exists())
+        with storage.database('learning') as db:
+            row=db.execute('SELECT * FROM media_assets WHERE video_id=?',(vid,)).fetchone()
+            self.assertEqual((row['state'],row['bytes'],row['pinned']),('evicted',0,0))
+            self.assertEqual(tuple(db.execute("SELECT status,reserved FROM download_jobs WHERE id='delete-job'").fetchone()),('cancelled',0))
+            self.assertEqual(db.execute('SELECT count(*) FROM catalog_video_tags WHERE video_id=?',(vid,)).fetchone()[0],0)
+        self.assertEqual(notes_store.get_note('learning',note['id'])['title'],'keep note')
+        self.assert_videos('bcd')
+        self.assertEqual(self.client.delete('/api/spaces/learning/video-catalog/'+vid).status_code,404)
+
+    def test_delete_missing_asset_and_space_isolation(self):
+        vid=video_id('d')
+        self.assertEqual(self.client.delete('/api/spaces/roaming/video-catalog/'+vid).status_code,404)
+        self.assertEqual(self.client.delete('/api/spaces/learning/video-catalog/'+vid).status_code,204)
+        self.assert_videos('abc')
+
+    def test_playback_protection_rolls_back_cancellation(self):
+        import time
+        vid=video_id('a')
+        with storage.database('learning') as db:
+            db.execute('UPDATE media_assets SET playback_until=? WHERE video_id=?',(time.time()+120,vid))
+            db.execute("INSERT INTO download_jobs(id,kind,target,status,reserved,created,updated) VALUES ('protected-job','download',?,'queued',100,0,0)",(vid,))
+        self.assertEqual(self.client.delete('/api/spaces/learning/video-catalog/'+vid).status_code,409)
+        with storage.database('learning') as db:
+            self.assertEqual(db.execute("SELECT status FROM download_jobs WHERE id='protected-job'").fetchone()[0],'queued')
+        self.assert_videos('abcd')

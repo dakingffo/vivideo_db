@@ -23,3 +23,15 @@ class GatewayTests(unittest.TestCase):
     def test_empty_message_rejected(self):
         for message in ['', '   ']:
             self.assertEqual(self.client.post('/api/chat', json={'message': message}).status_code, 422)
+
+    def test_frontend_cache_is_revalidated_and_main_script_is_versioned(self):
+        page = self.client.get('/')
+        self.assertEqual(page.headers['cache-control'], 'no-cache')
+        self.assertIn('/static/app.js?v=library-5', page.text)
+        asset = self.client.get('/static/app.js?v=library-5')
+        self.assertEqual(asset.status_code, 200)
+        self.assertEqual(asset.headers['cache-control'], 'no-cache')
+        if asset.headers.get('etag'):
+            cached = self.client.get('/static/app.js?v=library-5', headers={'If-None-Match':asset.headers['etag']})
+            self.assertEqual(cached.status_code, 304)
+            self.assertEqual(cached.headers['cache-control'], 'no-cache')

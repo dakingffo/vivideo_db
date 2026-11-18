@@ -1,3 +1,4 @@
+(() => {
 'use strict';
 
 const $ = id => document.getElementById(id);
@@ -13,10 +14,15 @@ const cacheLabels = {
 };
 
 let tags = [];
+let cache = {assets:[], jobs:[]};
+let lastData;
+let lastMarkup = '';
+const catalogVideos = new Map();
 let tagsReady = false;
 let tagRequest;
 let videoRequest;
 let writing = false;
+let writeVersion=0;
 let offset = 0;
 let query = '';
 let tagAction;
@@ -43,7 +49,8 @@ function showError(id, message = '') {
 }
 
 async function request(path, { method = 'GET', body, signal } = {}) {
-  const url = '/api/spaces/' + $('space').value + path;
+  const origin = spaceId;
+  const url = '/api/spaces/' + origin + path;
   let response;
   try {
     response = await fetch(url, {
@@ -56,11 +63,13 @@ async function request(path, { method = 'GET', body, signal } = {}) {
     if (error.name === 'AbortError') throw error;
     throw new Error('连接失败，请检查网络后重试。');
   }
+  if (origin !== spaceId) throw new DOMException('Space changed', 'AbortError');
   if (response.status === 204) return;
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(typeof data?.detail === 'string' ? data.detail : '请求失败（' + response.status + '）。');
   }
+  if (origin !== spaceId) throw new DOMException('Space changed', 'AbortError');
   return data;
 }
 
@@ -75,7 +84,7 @@ function renderChoices(container, available, selected, onChange) {
     return label;
   });
   container.replaceChildren(...choices);
-  if (!choices.length) container.append(element('p', '暂无标签。', 'status'));
+  if (!choices.length) container.append(element('span', container.id==='filter-tags'?'添加标签，慢慢建立你的内容地图。':'还没有标签，可以先创建一个。', 'catalog-tags-empty'));
 }
 
 function updateSelection(selection, id, input, errorId) {
@@ -100,13 +109,13 @@ function renderFilterTags() {
 }
 
 function syncButtons() {
-  for (const id of ['space', 'create-button', 'confirm-tag-action', 'cancel-tag-action',
+  for (const id of ['create-button', 'confirm-tag-action', 'cancel-tag-action',
                     'save-video-tags', 'cancel-video-action', 'clear-tags', 'rename-tag', 'new-tag',
                     'edit-tag-fields']) {
     $(id).disabled = writing;
   }
   $('managed-tags').querySelectorAll('button').forEach(node => { node.disabled = writing; });
-  $('videos').querySelectorAll('button').forEach(node => { node.disabled = writing || !tagsReady; });
+  $('library-grid').querySelectorAll('button').forEach(node => { node.disabled = writing || !tagsReady; });
 }
 
 function renderManagedTags() {
@@ -128,12 +137,14 @@ async function loadTags() {
   tagRequest?.abort();
   const controller = new AbortController();
   tagRequest = controller;
-  $('tag-status').textContent = '正在加载标签…';
+  if(!tagsReady)$('tag-status').textContent = '正在加载标签…';
   try {
     const data = await request('/video-tags', { signal: controller.signal });
     if (controller.signal.aborted) return;
+    const unchanged=tagsReady&&JSON.stringify(tags)===JSON.stringify(data.items);
     tags = data.items;
     tagsReady = true;
+    if(unchanged)return;
     const available = new Set(tags.map(tag => tag.id));
     for (const id of selectedTags) {
       if (!available.has(id)) selectedTags.delete(id);
@@ -152,26 +163,27 @@ async function loadTags() {
 }
 
 function renderVideos(data) {
-  $('videos').replaceChildren(...data.items.map(video => {
-    const row = element('li', undefined, 'video-row');
-    const info = element('div', undefined, 'video-information');
-    info.append(element('h3', video.title, 'video-title'));
-    if (video.author) info.append(element('p', video.author, 'video-meta'));
-    const badges = element('div', undefined, 'badges');
-    badges.append(element('span', cacheLabels[video.cache_state] ?? video.cache_state,
-      'badge cache ' + video.cache_state));
-    for (const tag of video.tags) badges.append(element('span', tag.name, 'badge'));
-    info.append(badges);
-    row.append(info, button('编辑标签', () => openVideoEditor(video)));
-    return row;
-  }));
-  const pages = Math.ceil(data.total / pageSize);
-  const page = Math.floor(offset / pageSize) + 1;
-  $('video-status').textContent = data.total ? '共 ' + data.total + ' 个视频' : '没有符合条件的视频。';
-  $('page-status').textContent = '第 ' + page + ' / ' + pages + ' 页';
-  $('pagination').hidden = pages < 2;
-  $('previous').disabled = page <= 1;
-  $('next').disabled = page >= pages;
+  lastData=data;
+  catalogVideos.clear();
+  const markup=data.items.map(item => {
+    const asset={pinned:item.pinned,bytes:item.bytes};
+    const job=cache.jobs.find(j=>j.kind==='download'&&j.target===item.video_id&&['queued','running'].includes(j.status));
+    const latest=cache.jobs.find(j=>j.kind==='download'&&j.target===item.video_id);
+    const video={id:item.video_id,title:item.title,author:item.author,url:item.url,summary:'',local:item.cache_state!=='missing',cache_state:item.cache_state,color:spaceId==='learning'?'mint':'blue',duration_seconds:item.duration_seconds};
+    catalogVideos.set(video.id,video);
+    const id=escapeHTML(video.id);
+    const cover=item.cache_state==='ready'?coverMarkup(video):`<div class="cover catalog-placeholder ${video.color}"><span>▷</span><small>${escapeHTML(cacheLabels[item.cache_state]||item.cache_state)}</small></div>`;
+    const labels=item.tags.map(t=>`<span>${escapeHTML(t.name)}</span>`).join('');
+    const failure=item.cache_state==='failed'&&latest?.error?`<p class="catalog-failure">${escapeHTML(latest.error)}</p>`:'';
+    return `<article class="card catalog-card" data-catalog-id="${id}">${cover}<div class="card-body"><h3>${escapeHTML(item.title)}</h3><div class="author">${escapeHTML(item.author||'未知作者')}</div><div class="card-tags"><span>${escapeHTML(cacheLabels[item.cache_state]||item.cache_state)}</span>${asset?.bytes?`<span>${formatBytes(asset.bytes)}</span>`:''}${labels}</div>${failure}<div class="card-actions"><button type="button" data-action="save" data-id="${id}" class="${saved[video.id]?'selected':''}">${saved[video.id]?'★ 已收藏':'☆ 收藏'}</button><button type="button" data-video-note="${id}">笔记</button><button type="button" data-edit-tags="${id}">编辑标签</button>${item.cache_state==='ready'?`<button type="button" data-catalog-action="pin" data-id="${id}">${asset?.pinned?'取消保留':'保留缓存'}</button>`:''}${job?`<button type="button" data-catalog-action="cancel" data-id="${id}">取消下载</button>`:['missing','failed'].includes(item.cache_state)?`<button type="button" data-catalog-action="retry" data-id="${id}">重新下载</button>`:''}<button type="button" class="catalog-delete" data-catalog-action="delete" data-id="${id}">删除</button></div></div></article>`;
+  }).join('')||'<div class="empty">还没有符合条件的视频。<br>调整筛选条件，或在下方粘贴视频链接开始下载。</div>';
+  if(markup!==lastMarkup){$('library-grid').innerHTML=markup;lastMarkup=markup;hydrateCovers($('library-grid'));}
+  const pages=Math.ceil(data.total/pageSize), current=Math.floor(offset/pageSize)+1;
+  $('video-status').textContent=data.total?'共 '+data.total+' 个视频':'暂无视频';
+  document.getElementById('saved-count').textContent=data.total;
+  $('page-status').textContent='第 '+current+' / '+Math.max(1,pages)+' 页';
+  $('pagination').hidden=pages<2;
+  $('previous').disabled=current<=1;$('next').disabled=current>=pages;
   syncButtons();
 }
 
@@ -185,10 +197,8 @@ async function loadVideos() {
   if ($('cache-state').value) params.set('cache_state', $('cache-state').value);
   if ($('untagged').checked) params.set('untagged', 'true');
   for (const id of selectedTags) params.append('tag_ids', id);
-  $('video-status').textContent = '正在加载视频…';
+  if(!lastData)$('video-status').textContent = '正在加载视频…';
   $('load-error').hidden = true;
-  $('pagination').hidden = true;
-  $('videos').replaceChildren();
   try {
     const data = await request('/video-catalog?' + params, { signal: controller.signal });
     if (controller.signal.aborted) return;
@@ -205,12 +215,13 @@ async function loadVideos() {
   }
 }
 
-async function refresh() {
-  const space = $('space').value;
+async function refresh({force=false}={}) {
+  if(!force&&(writing||$('tag-dialog').open||$('video-dialog').open||$('catalog-manager').open||document.getElementById('video-notes-dialog').open))return;
+  const space = spaceId;
   const pending = loadTags();
   const controller = tagRequest;
   await pending;
-  if ($('space').value === space && !controller.signal.aborted) await loadVideos();
+  if (spaceId === space && !controller.signal.aborted) await loadVideos();
 }
 
 function filterChanged() {
@@ -259,16 +270,16 @@ function readName(input) {
 async function write(errorId, operation) {
   if (writing) return;
   showError(errorId);
+  const generation=++writeVersion;
   writing = true;
   syncButtons();
   try {
     await operation();
-    await refresh();
+    await refresh({force:true});
   } catch (error) {
-    showError(errorId, error.message);
+    if(error.name!=='AbortError')showError(errorId, error.message);
   } finally {
-    writing = false;
-    syncButtons();
+    if(generation===writeVersion){writing = false;syncButtons();}
   }
 }
 
@@ -332,8 +343,12 @@ $('retry').addEventListener('click', refresh);
 $('previous').addEventListener('click', () => { offset -= pageSize; loadVideos(); });
 $('next').addEventListener('click', () => { offset += pageSize; loadVideos(); });
 
-$('space').addEventListener('change', () => {
-  videoRequest?.abort();
+function resetSpace() {
+  ++writeVersion;writing=false;
+  videoRequest?.abort();tagRequest?.abort();
+  $('tag-dialog').close();$('video-dialog').close();$('catalog-manager').close();
+  catalogVideos.clear();lastData=null;lastMarkup='';cache={assets:[],jobs:[]};
+  $('library-grid').replaceChildren();
   tags = [];
   tagsReady = false;
   selectedTags.clear();
@@ -344,16 +359,45 @@ $('space').addEventListener('change', () => {
   $('tag-mode').value = 'all';
   $('untagged').checked = false;
   $('new-tag').value = '';
-  $('videos').replaceChildren();
   $('pagination').hidden = true;
   $('load-error').hidden = true;
-  $('video-status').textContent = '正在加载视频…';
+  if(!lastData)$('video-status').textContent = '正在加载视频…';
   showError('create-error');
   showError('filter-error');
   renderManagedTags();
   renderFilterTags();
   refresh();
-});
+ }
 
+$('library-grid').addEventListener('click', async event => {
+  const editor=event.target.closest('[data-edit-tags]');
+  if(editor){const item=lastData?.items.find(v=>v.video_id===editor.dataset.editTags);if(item)openVideoEditor(item);return;}
+  const button=event.target.closest('[data-catalog-action]');if(!button||writing)return;
+  const id=button.dataset.id,action=button.dataset.catalogAction,origin=spaceId;
+  if(action==='delete'&&!confirm('删除此视频并清理对应缓存？笔记和观看历史会保留。'))return;
+  const generation=++writeVersion;writing=true;syncButtons();
+  try{
+    if(action==='delete'){
+      await request('/video-catalog/'+encodeURIComponent(id),{method:'DELETE'});
+      delete saved[id];persist('saved',saved);localCacheVideos.delete(id);coverCache.delete(origin+'/'+id);
+      for(const turn of recommendationTurns)turn.videos=(turn.videos||[]).filter(v=>v.id!==id);
+      videos=videos.filter(v=>v.id!==id);restoreConversation();
+    }else if(action==='pin'){
+      const asset=lastData.items.find(v=>v.video_id===id);
+      await request('/local-videos/'+encodeURIComponent(id),{method:'PATCH',body:{pinned:!asset?.pinned}});
+    }else if(action==='retry')await request('/local-videos/'+encodeURIComponent(id)+'/download',{method:'POST'});
+    else {
+      const job=cache.jobs.find(j=>j.target===id&&j.kind==='download'&&['queued','running'].includes(j.status));
+      if(job)await request('/download-jobs/'+job.id+'/cancel',{method:'POST'});
+    }
+    if(origin===spaceId){await refresh({force:true});toast(action==='delete'?'视频与缓存已移除':'已更新');}
+  }catch(error){if(origin===spaceId&&error.name!=='AbortError')toast(error.message);}
+  finally{if(generation===writeVersion){writing=false;syncButtons();}if(origin===spaceId)refreshLocalCache();}
+});
+$('manage-catalog-tags').onclick=()=>{$('catalog-manager').showModal();$('new-tag').focus();};
+$('close-catalog-manager').onclick=()=>$('catalog-manager').close();
+$('catalog-manager').addEventListener('cancel',event=>{if(writing)event.preventDefault();});
+$('open-library-download').onclick=()=>{$('local-library').open=true;$('import-video-url').focus();};
+window.videoCatalog={refresh,setSpace:resetSpace,setCache(value){cache=value;if(lastData)renderVideos(lastData);},rerender(){if(lastData)renderVideos(lastData);},find(id){return catalogVideos.get(id);}};
 renderFilterTags();
-refresh();
+})();
