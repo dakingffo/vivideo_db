@@ -15,6 +15,7 @@ from . import __version__
 from .model_configs import router as model_configs_router
 from .state_api import router as state_router
 from .notes_api import router as notes_router
+from .history_api import router as history_router
 from .media import router as media_router
 from .library_api import router as library_router
 from .catalog_api import router as catalog_router
@@ -26,6 +27,7 @@ app = FastAPI(title='ViVideo', version=__version__)
 app.include_router(model_configs_router)
 app.include_router(state_router)
 app.include_router(notes_router)
+app.include_router(history_router)
 app.include_router(media_router)
 app.include_router(service_status_router)
 app.include_router(library_router)

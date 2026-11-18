@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>观看历史与统计</title>
+    <link rel="stylesheet" href="/static/part-c.css">
+</head>
+<body>
+    <header>
+        <h1>观看历史与统计 <span class="tz-hint">(北京时间 UTC+08:00)</span></h1>
+        <div class="filters">
+            <select id="space-select">
+                <option value="learning">学习空间</option>
+                <option value="roaming">漫游空间</option>
+            </select>
+            <label>开始: <input type="date" id="start-date"></label>
+            <label>结束: <input type="date" id="end-date"></label>
+            <button id="btn-query">查询</button>
+        </div>
+    </header>
+
+    <section class="stats-cards">
+        <div class="card"><h3>观看次数</h3><p id="stat-event-count">0</p></div>
+        <div class="card"><h3>不同视频数</h3><p id="stat-video-count">0</p></div>
+        <div class="card"><h3>统计观看时长</h3><p id="stat-watched-seconds">00:00</p></div>
+        <div class="card"><h3>平均每次时长</h3><p id="stat-average-seconds">00:00</p></div>
+    </section>
+
+    <section class="tables-container">
+        <div class="table-wrap">
+            <h2>每日统计</h2>
+            <table id="daily-table">
+                <thead><tr><th>日期</th><th>次数</th><th>视频数</th><th>时长</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="table-wrap">
+            <h2>前五视频排行</h2>
+            <table id="ranking-table">
+                <thead><tr><th>视频标题</th><th>次数</th><th>时长</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="history-section">
+        <h2>历史记录 <span class="hint">（关键词仅筛选历史列表，统计按所选时间范围计算）</span></h2>
+        <div class="search-bar">
+            <input type="text" id="keyword-input" placeholder="搜索视频标题..." maxlength="100">
+            <button id="btn-search">搜索</button>
+        </div>
+        <table id="history-table">
+            <thead><tr><th>标题</th><th>总时长</th><th>观看时长</th><th>进度</th><th>记录时间</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <div class="pagination">
+            <button id="btn-prev">上一页</button>
+            <span id="page-info">第 1 页</span>
+            <button id="btn-next">下一页</button>
+        </div>
+    </section>
+
+    <script src="/static/part-c.js"></script>
+</body>
+</html>
