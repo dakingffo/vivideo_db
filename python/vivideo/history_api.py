@@ -15,17 +15,17 @@ BJT = timezone(timedelta(hours=8))
 
 def validate_space(space_id: str):
     if space_id not in ("learning", "roaming"):
-        raise StateError("Invalid space_id")
+        raise StateError("Invalid space_id", 422)
 
 def validate_uuid(event_id: str):
     try:
         uuid.UUID(event_id)
     except ValueError:
-        raise StateError("Invalid UUID format")
+        raise StateError("Invalid UUID format", 422)
 
 def parse_time_range(from_ms: Optional[int], to_ms: Optional[int]) -> tuple[int, int]:
     if (from_ms is None) != (to_ms is None):
-        raise StateError("from_ms and to_ms must be provided together")
+        raise StateError("from_ms and to_ms must be provided together", 422)
     
     if from_ms is None:
         now_bjt = datetime.now(BJT)
@@ -36,10 +36,15 @@ def parse_time_range(from_ms: Optional[int], to_ms: Optional[int]) -> tuple[int,
         to_ms = int(to_dt.timestamp() * 1000)
     else:
         if not (0 <= from_ms < to_ms):
-            raise StateError("Invalid time range: must be 0 <= from_ms < to_ms")
+            raise StateError("Invalid time range: must be 0 <= from_ms < to_ms", 422)
         if (to_ms - from_ms) > 31 * 86400000:
-            raise StateError("Time span exceeds 31 days")
+            raise StateError("Time span exceeds 31 days", 422)
             
+    try:
+        datetime.fromtimestamp(from_ms / 1000, tz=BJT)
+        datetime.fromtimestamp(to_ms / 1000, tz=BJT)
+    except (ValueError, OverflowError, OSError):
+        raise StateError("Invalid timestamp", 422)
     return from_ms, to_ms
 
 @router.get("/watch-history")
@@ -56,7 +61,9 @@ def get_history(
     
     keyword = None
     if q is not None:
-        q = q.strip()[:100]
+        q = q.strip()
+        if len(q) > 100:
+            raise StateError("Keyword exceeds 100 characters", 422)
         if q:
             keyword = q
 
@@ -120,19 +127,19 @@ def get_daily_watch_stats(
         raw_daily = get_daily_stats(db, from_ms, to_ms)
         
     # 无记录日补零逻辑
-    daily_map = {item["day"]: item for item in raw_daily}
+    daily_map = {item["date"]: item for item in raw_daily}
     from_dt = datetime.fromtimestamp(from_ms / 1000.0, tz=BJT).replace(hour=0, minute=0, second=0, microsecond=0)
     to_dt = datetime.fromtimestamp(to_ms / 1000.0, tz=BJT).replace(hour=0, minute=0, second=0, microsecond=0)
     
     result = []
     current_dt = from_dt
-    while current_dt < to_dt:
+    while int(current_dt.timestamp() * 1000) < to_ms:
         day_str = current_dt.strftime("%Y-%m-%d")
         if day_str in daily_map:
             result.append(daily_map[day_str])
         else:
             result.append({
-                "day": day_str,
+                "date": day_str,
                 "event_count": 0,
                 "video_count": 0,
                 "watched_seconds": 0

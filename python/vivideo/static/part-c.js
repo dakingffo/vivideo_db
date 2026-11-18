@@ -1,4 +1,5 @@
 let controller = null;
+let totalPages = 1;
 let currentPage = 1;
 const pageSize = 20;
 let currentSpace = 'learning';
@@ -29,7 +30,7 @@ function bindEvents() {
 }
 
 function formatDate(date) {
-    return date.toISOString().split('T')[0];
+    return new Date(date.getTime() + 8 * 3600000).toISOString().split('T')[0];
 }
 
 function formatSeconds(sec) {
@@ -46,8 +47,7 @@ function formatDateTime(ms) {
 
 function getMsFromDate(dateStr, isEnd) {
     const d = new Date(dateStr + 'T00:00:00+08:00');
-    if (isEnd) d.setDate(d.getDate() + 1);
-    return d.getTime();
+    return d.getTime() + (isEnd ? 86400000 : 0);
 }
 
 function toggleButtons(disabled) {
@@ -57,6 +57,7 @@ function toggleButtons(disabled) {
 async function fetchData() {
     if (controller) controller.abort();
     controller = new AbortController();
+    const request = controller;
 
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
@@ -74,19 +75,26 @@ async function fetchData() {
             fetchHistory(keyword)
         ]);
     } catch (err) {
-        if (err.name !== 'AbortError') console.error(err);
+        if (err.name !== 'AbortError') alert(err.message);
     } finally {
-        toggleButtons(false);
+        if (request === controller) {
+            toggleButtons(false);
+            document.getElementById('btn-prev').disabled = currentPage <= 1;
+            document.getElementById('btn-next').disabled = currentPage >= totalPages;
+        }
     }
 }
 
 async function fetchJson(url) {
-    const res = await fetch(url, { signal: controller.signal });
+    const request = controller;
+    const res = await fetch(url, { signal: request.signal });
     if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Request failed' }));
         throw new Error(err.detail);
     }
-    return res.json();
+    const data = await res.json();
+    if (request !== controller || request.signal.aborted) throw new DOMException('Stale request', 'AbortError');
+    return data;
 }
 
 async function fetchStats() {
@@ -115,7 +123,7 @@ async function fetchDaily() {
     data.items.forEach(d => {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td></td><td></td><td></td><td></td>`;
-        tr.children[0].textContent = d.day;
+        tr.children[0].textContent = d.date;
         tr.children[1].textContent = d.event_count;
         tr.children[2].textContent = d.video_count;
         tr.children[3].textContent = formatSeconds(d.watched_seconds);
@@ -134,8 +142,7 @@ async function fetchHistory(keyword) {
 
     if (data.items.length === 0 && currentPage > 1) {
         currentPage--;
-        fetchHistory(keyword);
-        return;
+        return fetchHistory(keyword);
     }
 
     data.items.forEach(item => {
@@ -147,11 +154,11 @@ async function fetchHistory(keyword) {
         tr.children[3].textContent = `${Math.round(item.progress * 100)}%`;
         tr.children[4].textContent = formatDateTime(item.created);
         
-        tr.querySelector('.btn-del').addEventListener('click', () => deleteEvent(item.id, keyword));
+        tr.querySelector('.btn-del').addEventListener('click', () => deleteEvent(item.event_id, keyword));
         tbody.appendChild(tr);
     });
 
-    const totalPages = Math.max(1, Math.ceil(data.total / pageSize));
+    totalPages = Math.max(1, Math.ceil(data.total / pageSize));
     document.getElementById('page-info').textContent = `第 ${currentPage} / ${totalPages} 页 (共 ${data.total} 条)`;
     document.getElementById('btn-prev').disabled = currentPage <= 1;
     document.getElementById('btn-next').disabled = currentPage >= totalPages;
@@ -160,8 +167,9 @@ async function fetchHistory(keyword) {
 async function deleteEvent(eventId, keyword) {
     if (!confirm('确认删除该条观看记录？')) return;
     try {
-        await fetch(`/api/spaces/${currentSpace}/watch-history/${eventId}`, { method: 'DELETE' });
-        fetchData(); // 刷新所有数据
+        const response = await fetch(`/api/spaces/${currentSpace}/watch-history/${eventId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error((await response.json()).detail || '删除失败');
+        await fetchData(); // 刷新所有数据
     } catch (err) {
         alert('删除失败: ' + err.message);
     }
